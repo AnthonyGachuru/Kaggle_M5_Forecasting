@@ -36,6 +36,15 @@ def import_data():
     return df_raw, calendar, price
 
 
+def create_forecast_dates(df):
+    latest = 1913
+    forecast = 28
+    for i in range(1, forecast+1):
+        col_name = 'd_'+str(latest+i)
+        df[col_name] = 0
+    return df
+
+
 def map_calendar(calendar):
     return calendar[['date', 'd', 'wm_yr_wk', 'weekday', 'month', 'year']].copy()
 
@@ -48,6 +57,12 @@ def map_holidays(calendar):
     holidays = holidays[flag]
     holidays.rename(columns={'event_name_1':'holiday'}, inplace=True)
     return holidays
+
+
+def map_snaps(calendar):
+    snaps = calendar[['d', 'snap_CA', 'snap_TX', 'snap_WI']]
+    snaps.rename(columns={'snap_CA': 'CA', 'snap_TX':'TX', 'snap_WI':'WI'}, inplace=True)
+    return snaps
 
 
 # ===========================================================================
@@ -64,18 +79,33 @@ def rank_products(df_raw):
 
 def filter_product(df_raw, id):
     flag = df_raw['id'] == id
-    drop_cols = ['dept_id', 'cat_id', 'state_id']
+    drop_cols = ['dept_id', 'cat_id']
     return df_raw[flag].drop(drop_cols, axis=1)
 
 
 def unpivot_weeks(df_filter):
-    id_vars = ['id', 'item_id', 'store_id']
+    id_vars = ['id', 'item_id', 'store_id', 'state_id']
     return df_filter.melt(id_vars=id_vars, var_name='d')
+
+
+def tag_train_eval(df):
+    latest = pd.to_datetime('24-04-2016', format='%d-%m-%Y')
+    df['eval_set'] = df['date'].apply(lambda x: True if x>latest else False)
+    return df
 
 
 def join_dates(df, mapping_calendar):
     calendar = mapping_calendar[['d', 'date', 'wm_yr_wk', 'weekday', 'month', 'year']]
     df = pd.merge(df, calendar , how='left', left_on='d', right_on='d')
+    return df
+
+
+def join_snaps(df, snaps):
+    state = df['state_id'][0]
+    snaps = snaps[['d', state]]
+    snaps.rename(columns={state:'snap'}, inplace=True)
+    df = pd.merge(df, snaps[['d', 'snap']], how='left', left_on='d', right_on='d')
+    df.drop('state_id', axis=1, inplace=True)
     return df
 
 
@@ -91,18 +121,33 @@ def join_prices(df, price):
     merge_cols = ['item_id', 'store_id', 'wm_yr_wk']
     df = pd.merge(df, price, how='left', left_on=merge_cols, right_on=merge_cols)
     df.sort_values(by='date', inplace=True)
+    df.drop(['item_id', 'store_id', 'wm_yr_wk'], axis=1, inplace=True)
     return df
 
 
-def boxcox_transform(df):
+def include_diff_dates(df):
+    min_date = df['date'].min()
+    df['dt'] = df['date'].apply(lambda x: (x-min_date).days)
+    df['dt2'] = df['dt']**2
+    return df
+
+
+def boxcox_transform(df, boxcox):
     metric = 'value'
-    df['adj_value'], boxcox_lambda = boxcox(df[metric]+1)
+    boxcox_lambda = 1
+    if boxcox == 1:
+        df['value'], boxcox_lambda = boxcox(df[metric]+1)
     return df, boxcox_lambda
 
 
 # ===========================================================================
 # FUNCTIONS: MODELLING
 # ===========================================================================
+
+def select_variables(df):
+    # var_y = 'value'
+    # exclude_cols = ['date', ]
+    pass
 
 
 # ===========================================================================
