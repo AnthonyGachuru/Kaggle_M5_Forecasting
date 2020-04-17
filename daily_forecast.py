@@ -66,7 +66,7 @@ def map_snaps(calendar):
 
 
 # ===========================================================================
-# FUNCTIONS: PREPROCESSING
+# FUNCTIONS: PRE PROCESSING
 # ===========================================================================
 
 def rank_products(df_raw):
@@ -145,11 +145,10 @@ def boxcox_transform(df, flag_boxcox=True):
 # ===========================================================================
 
 def select_variables(df, select_cols=['date', 'value', 'month', 'weekday', 'holiday', 'snap', 'sell_price', 'dt', 'dt2', 'eval_set']):   
-    item = df['id'][0]
     df = df[select_cols]
     df.sort_values(by='date', inplace=True)
     df.set_index('date', inplace=True)
-    return df, item
+    return df
 
 
 def transform_dummies(df, dummies=['weekday', 'month', 'holiday']):
@@ -197,7 +196,72 @@ def predict_model(model, X_test):
 
 
 # ===========================================================================
+# FUNCTIONS: POST PROCESSING
+# ===========================================================================
+
+def create_df_out():
+    cols = ['id'] + ['F'+str(i) for i in range(1,29)]
+    df_out = pd.DataFrame(columns=cols)
+    return df_out
+
+
+def insert_predictions(df_out, row, item, y_pred):
+    df_out.loc[row, 'id'] = item
+    df_out.iloc[row, 1:] = y_pred.T
+    return df_out
+
+
+def export_df(df_out, filename):
+    df_out.set_index('id', inplace=True)
+    filename = 'output/linear.csv'
+    df_out.to_csv(filename)
+
+
+# ===========================================================================
 # MAIN
 # ===========================================================================
 if __name__ == '__main__':
-    print()
+
+    # Import data:
+    df_raw, calendar, price = import_data()
+    df_raw = create_forecast_dates(df_raw)
+    mapping_calendar = map_calendar(calendar)
+    holidays = map_holidays(calendar)
+    snaps = map_snaps(calendar)
+    
+    sorted_products = rank_products(df_raw)
+    df_out = create_df_out()
+
+    # Loop thorugh products:
+    for id, item in enumerate(sorted_products.index):
+
+        print('id: {} | item: {}'.format(id, item))
+
+        # Pre process data:
+        df = filter_product(df_raw, item)
+        df = unpivot_weeks(df)
+        df = join_snaps(df, snaps)
+        df = join_dates(df, mapping_calendar)
+        df = tag_train_eval(df)
+        df = join_holidays(df, holidays)
+        df = join_prices(df, price)
+        df = include_diff_dates(df)
+        df, boxcox_lambda = boxcox_transform(df)
+        df = select_variables(df)
+        df = transform_dummies(df)
+        
+        # Train/test split
+        df_training, df_eval= train_eval_split(df)
+        df_train, df_test = train_test_split(df_training)
+        X_train, y_train = extract_X_y(df_train)
+        X_test, y_test = extract_X_y(df_test)
+        X_eval, y_eval = extract_X_y(df_eval)
+        X_train, X_test, X_eval = standardize_X(X_train, X_test, X_eval)
+        
+        # Model
+        model = train_model(X_train, y_train)
+        y_pred = predict_model(model, X_eval)
+        df_out = insert_predictions(df_out, id, item, y_pred**(1/boxcox_lambda))
+    
+    filename = 'data/output.csv'
+    export_df(df_out, filename)
