@@ -132,10 +132,10 @@ def include_diff_dates(df):
     return df
 
 
-def boxcox_transform(df, boxcox):
+def boxcox_transform(df, flag_boxcox=True):
     metric = 'value'
     boxcox_lambda = 1
-    if boxcox == 1:
+    if flag_boxcox:
         df['value'], boxcox_lambda = boxcox(df[metric]+1)
     return df, boxcox_lambda
 
@@ -144,10 +144,19 @@ def boxcox_transform(df, boxcox):
 # FUNCTIONS: MODELLING
 # ===========================================================================
 
-def select_variables(df):
-    # var_y = 'value'
-    # exclude_cols = ['date', ]
-    pass
+def select_variables(df, select_cols=['id', 'date', 'value', 'month', 'weekday', 'holiday', 'snap', 'sell_price', 'dt', 'dt2', 'eval_set']):   
+    return df[select_cols]
+
+
+def transform_dummies(df, dummies=['weekday', 'month', 'holiday']):
+    df = pd.get_dummies(df, columns=dummies, drop_first=True)
+    return df
+
+
+def train_eval_split(df):
+    df_train = df[~df['eval_set']].drop('eval_set', axis=1)
+    df_eval = df[df['eval_set']].drop('eval_set', axis=1)
+    return df_train, df_eval
 
 
 # ===========================================================================
