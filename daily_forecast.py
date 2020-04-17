@@ -144,8 +144,12 @@ def boxcox_transform(df, flag_boxcox=True):
 # FUNCTIONS: MODELLING
 # ===========================================================================
 
-def select_variables(df, select_cols=['id', 'date', 'value', 'month', 'weekday', 'holiday', 'snap', 'sell_price', 'dt', 'dt2', 'eval_set']):   
-    return df[select_cols]
+def select_variables(df, select_cols=['date', 'value', 'month', 'weekday', 'holiday', 'snap', 'sell_price', 'dt', 'dt2', 'eval_set']):   
+    item = df['id'][0]
+    df = df[select_cols]
+    df.sort_values(by='date', inplace=True)
+    df.set_index('date', inplace=True)
+    return df, item
 
 
 def transform_dummies(df, dummies=['weekday', 'month', 'holiday']):
@@ -157,6 +161,39 @@ def train_eval_split(df):
     df_train = df[~df['eval_set']].drop('eval_set', axis=1)
     df_eval = df[df['eval_set']].drop('eval_set', axis=1)
     return df_train, df_eval
+
+
+def train_test_split(df, split=.8):
+    n_train = int(df.shape[0]*split)
+    df_train = df[:n_train]
+    df_test = df[n_train:]
+    return df_train, df_test
+
+
+def extract_X_y(df):
+    var_y = 'value'
+    X = df.drop(var_y, axis=1)
+    y = df[[var_y]]
+    return X, y
+
+
+def standardize_X(X_train, X_test, X_eval):
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train)
+    X_test = scaler.transform(X_test)
+    X_eval = scaler.transform(X_eval)
+    return X_train, X_test, X_eval
+
+
+def train_model(X_train, y_train):
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+    return model
+
+
+def predict_model(model, X_test):
+    y_pred = model.predict(X_test)
+    return y_pred
 
 
 # ===========================================================================
